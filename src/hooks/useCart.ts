@@ -1,52 +1,73 @@
-import { ProductType } from '@/types/types';
-import React, { useEffect, useState } from 'react'
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+import { CartType, ProductType } from '@/types/types'
 
-const STORAGE_KEY = 'cart';
+export const useCartStore = create<CartType>()(
+  persist(
+    (set, get) => ({
+      products: [],
+      count: 0,
+      amount: 0,
+      addToCart: (product: ProductType) =>
+        set((state) => {
+          const existingProduct = state.products.find(
+            (p) => p.id === product.id
+          )
+          let newProducts: ProductType[]
 
-interface StoredCart {
-    items: ProductType[];
-    createdAt: string;
-}
+          if (existingProduct) {
+            newProducts = state.products.map((p) =>
+              p.id === product.id ? { ...p, quantity: p.quantity + 1 } : p
+            )
+          } else {
+            newProducts = [...state.products, { ...product, quantity: 1 }]
+          }
 
-const useCart = () => {
+          const totalAmount = newProducts.reduce(
+            (total, p) => total + p.price * p.quantity,
+            0
+          )
 
-    const [cartItems, setCartItems] = useState<ProductType[]>([]);
-    const [countItem, setCountItem] = useState<number>(0);
-    const [createdAt, setCreatedAt] = useState<string>('');
+          return {
+            ...state,
+            products: newProducts,
+            count: state.count + 1,
+            amount: totalAmount,
+          }
+        }),
+      removeFromCart: (productId: number) =>
+        set((state) => {
+          const newProducts = state.products.filter(
+            (product) => product.id !== productId
+          )
+          const totalAmount = newProducts.reduce(
+            (total, p) => total + p.price * p.quantity,
+            0
+          )
 
-    useEffect(() => {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if(stored){
-            const { items, createdAt } = JSON.parse(stored) as StoredCart;
-            setCartItems(items);
-            setCartItems(items)
-        } else {
-            const newCreatedAt = new Date().toISOString();
-            setCreatedAt(newCreatedAt);
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({ items: [], createdAt: newCreatedAt}))
-        }
-    },[]);
-
-    useEffect(() => {
-        setCountItem(cartItems.length);
-        console.log(cartItems)
-    }, [cartItems])
-
-    const addToCart = (newProduct: ProductType) =>{
-        setCartItems(prev => {
-            const existingProduct = prev.find((item) => item.id === newProduct.id);
-            if(existingProduct){
-                return prev.map(item => 
-                    item.id === newProduct.id 
-                        ? {...item, quantity: item.quantity + newProduct.quantity}
-                        : item
-                );
-            }
-            return [...prev, newProduct];    
-        });
+          return {
+            ...state,
+            products: newProducts,
+            count: newProducts.length,
+            amount: totalAmount,
+          }
+        }),
+      clearCart: () =>
+        set((state) => ({
+          ...state,
+          products: [],
+        })),
+      updateAmount: () =>
+        set((state) => ({
+          ...state,
+          amount: state.products.reduce(
+            (total, product) => total + product.quantity,
+            0
+          ),
+        })),
+    }),
+    {
+      name: 'cart-storage',
     }
-
-    return {countItem, addToCart}
-}
-
-export default useCart
+  )
+)
